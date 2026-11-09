@@ -1,0 +1,108 @@
+/*
+ * Pokemon ShaderMix — Delta / Core Image adaptation
+ *
+ * Single-pass, Scale3x-style edge-aware reconstruction with bevel and
+ * color adjustments. Adapted for Delta's Core Image Kernel Language custom
+ * filter interface; this is not the original GLSL shader.
+ *
+ * Copyright (C) 2011-2014 Hyllian/Jararaca (Bevel shader concept)
+ * Copyright (C) 2026 ohZugghkkn-tech (integration)
+ *
+ * Distributed under the GNU General Public License, version 2 or later.
+ */
+
+vec4 samplePixel(sampler source, vec2 pixel, vec2 sourceSize)
+{
+    vec2 boundedPixel = clamp(pixel, vec2(0.0), sourceSize - vec2(1.0));
+    return sample(source, floor(boundedPixel) + vec2(0.5));
+}
+
+bool sameColor(vec3 a, vec3 b)
+{
+    return length(a - b) <= 0.08;
+}
+
+vec3 edgeAwarePixel(sampler source, vec2 cell, vec2 phase, vec2 sourceSize)
+{
+    vec3 A = samplePixel(source, cell + vec2(-1.0, -1.0), sourceSize).rgb;
+    vec3 B = samplePixel(source, cell + vec2( 0.0, -1.0), sourceSize).rgb;
+    vec3 C = samplePixel(source, cell + vec2( 1.0, -1.0), sourceSize).rgb;
+    vec3 D = samplePixel(source, cell + vec2(-1.0,  0.0), sourceSize).rgb;
+    vec3 E = samplePixel(source, cell, sourceSize).rgb;
+    vec3 F = samplePixel(source, cell + vec2( 1.0,  0.0), sourceSize).rgb;
+    vec3 G = samplePixel(source, cell + vec2(-1.0,  1.0), sourceSize).rgb;
+    vec3 H = samplePixel(source, cell + vec2( 0.0,  1.0), sourceSize).rgb;
+    vec3 I = samplePixel(source, cell + vec2( 1.0,  1.0), sourceSize).rgb;
+
+    bool bd = sameColor(B, D);
+    bool bf = sameColor(B, F);
+    bool dh = sameColor(D, H);
+    bool fh = sameColor(F, H);
+
+    if (!sameColor(B, H) && !sameColor(D, F))
+    {
+        if (phase.y < 0.5 && phase.x < 0.5 && bd) return D;
+        if (phase.y < 0.5 && phase.x > 1.5 && bf) return F;
+        if (phase.y > 1.5 && phase.x < 0.5 && dh) return D;
+        if (phase.y > 1.5 && phase.x > 1.5 && fh) return F;
+
+        if (phase.y < 0.5 && phase.x >= 0.5 && phase.x <= 1.5 &&
+            ((bd && !sameColor(E, C)) || (bf && !sameColor(E, A)))) return B;
+
+        if (phase.y > 1.5 && phase.x >= 0.5 && phase.x <= 1.5 &&
+            ((dh && !sameColor(E, I)) || (fh && !sameColor(E, G)))) return H;
+
+        if (phase.x < 0.5 && phase.y >= 0.5 && phase.y <= 1.5 &&
+            ((bd && !sameColor(E, G)) || (dh && !sameColor(E, A)))) return D;
+
+        if (phase.x > 1.5 && phase.y >= 0.5 && phase.y <= 1.5 &&
+            ((bf && !sameColor(E, I)) || (fh && !sameColor(E, C)))) return F;
+    }
+
+    return E;
+}
+
+vec3 adjustColor(vec3 color)
+{
+    // Original GLSL defaults: saturation=1, contrast=1, luminance=1,
+    // target gamma=2.2, and all channel levels=1.
+    float y = dot(color, vec3(0.299, 0.587, 0.114));
+    color = mix(vec3(y), color, 1.0);
+    color = (color - vec3(0.5)) * 1.0 + vec3(0.5);
+    color *= 1.0;
+    color = pow(max(color, vec3(0.0)), vec3(2.2 / 2.2));
+    return clamp(color, 0.0, 1.0);
+}
+
+vec3 applyBevel(vec3 color, vec2 localPosition)
+{
+    float edgeDistance = min(
+        min(localPosition.x, 1.0 - localPosition.x),
+        min(localPosition.y, 1.0 - localPosition.y)
+    );
+
+    float bevel = 1.0 - smoothstep(0.0, 0.5, edgeDistance);
+    return clamp(
+        color + mix(vec3(0.18), vec3(0.82), color) * bevel * 0.35,
+        0.0,
+        1.0
+    );
+}
+
+kernel vec4 pokemonShaderMix(sampler source, vec2 sourceSize, vec2 outputSize)
+{
+    vec2 outputPosition = destCoord();
+    vec2 sourcePosition = outputPosition * sourceSize / outputSize - vec2(0.5);
+    vec2 cell = floor(sourcePosition + vec2(0.5));
+    vec2 localPosition = fract(sourcePosition + vec2(0.5));
+
+    vec2 scale = max(outputSize / sourceSize, vec2(1.0));
+    vec2 phase = floor(localPosition * scale);
+
+    vec3 color = edgeAwarePixel(source, cell, phase, sourceSize);
+    color = applyBevel(color, localPosition);
+    color = adjustColor(color);
+
+    float alpha = samplePixel(source, cell, sourceSize).a;
+    return vec4(color, alpha);
+}
