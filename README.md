@@ -1,15 +1,13 @@
 # Pokemon ShaderMix
 
-A standalone, single-pass GLSL shader combining:
+This repository includes a single-file GLSL version and an mGBA-ready shader package.
 
-- ScaleFX/Scale3x-style edge-aware pixel-art reconstruction
-- Bevel-style per-pixel highlights
-- Image-adjustment controls (saturation, contrast, luminance, gamma, and RGB balance)
+## mGBA (folder package)
 
-## Use
+For mGBA, use the whole [`Pokemon-ShaderMix.shader` folder](mgba/Pokemon-ShaderMix.shader/), not the standalone GLSL file. Installation notes are in [`mgba/README.md`](mgba/README.md). To download the package, download the repository ZIP and extract the `.shader` folder intact.
 
-Load `pokemon-shadermix.glsl` as a GLSL-compatible post-processing shader. It expects `Source`, `TextureSize`, `OutputSize`, and `vTexCoord` inputs. For the intended pixel-art effect, use an output scale around 3x or higher and nearest-neighbor source sampling. Shader parameter support depends on the host.
+## Standalone GLSL version
 
-This is a compact, independent single-pass integration and **not** a byte-for-byte merge of the upstream ScaleFX multi-pass pipeline. The upstream ScaleFX pipeline uses multiple intermediate passes; this file implements a Scale3x-style neighborhood decision to keep the result in one shader. The `colorspace-tools.h` header is not incorporated; color adjustments use a small luminance-based operation instead.
+[`pokemon-shadermix.glsl`](pokemon-shadermix.glsl) is for compatible shader hosts; it is not the mGBA package entry point.
 
-See [ATTRIBUTIONS.md](ATTRIBUTIONS.md) for source credits and license information. The combined shader is distributed under GPL-2.0-or-later because it incorporates the GPL-licensed Bevel shader approach; upstream license notices remain applicable to their respective works.
+The combined effect is a compact single-pass Scale3x-style edge-aware pixel-art filter with bevel-style highlighting and image-adjustment controls. It is not a verbatim merge of the original multi-pass ScaleFX pipeline. See [ATTRIBUTIONS.md](ATTRIBUTIONS.md) for source credits and license information.
